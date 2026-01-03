@@ -7,6 +7,7 @@ import { encode, decode, createBlob, decodeAudioData } from '../utils/audioUtils
 
 interface CallProtectionProps {
   onEndCall: (log?: CallLog) => void;
+  autoKillEnabled: boolean;
 }
 
 const reportRiskFunctionDeclaration: FunctionDeclaration = {
@@ -34,7 +35,7 @@ const reportRiskFunctionDeclaration: FunctionDeclaration = {
   },
 };
 
-const CallProtection: React.FC<CallProtectionProps> = ({ onEndCall }) => {
+const CallProtection: React.FC<CallProtectionProps> = ({ onEndCall, autoKillEnabled }) => {
   const [isConnecting, setIsConnecting] = useState(true);
   const [risk, setRisk] = useState<{level: RiskLevel, reason: string, markers: string[]}>({
     level: 'SAFE',
@@ -43,12 +44,32 @@ const CallProtection: React.FC<CallProtectionProps> = ({ onEndCall }) => {
   });
   const [transcripts, setTranscripts] = useState<string[]>([]);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [autoTerminated, setAutoTerminated] = useState(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const sessionRef = useRef<any>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const transcriptionBufferRef = useRef<{input: string, output: string}>({ input: '', output: '' });
+
+  // Handle high risk effects: Vibration + Auto Kill
+  useEffect(() => {
+    if (risk.level === 'HIGH') {
+      // Vibrate for physically abled/elderly notification
+      if ('vibrate' in navigator) {
+        navigator.vibrate([300, 100, 300, 100, 500]);
+      }
+
+      if (autoKillEnabled) {
+        setAutoTerminated(true);
+        // Delay slightly so the user sees the reason/alert before cut
+        const timer = setTimeout(() => {
+          handleEnd(true);
+        }, 3000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [risk.level]);
 
   useEffect(() => {
     const timer = setInterval(() => setElapsedTime(prev => prev + 1), 1000);
@@ -102,7 +123,7 @@ const CallProtection: React.FC<CallProtectionProps> = ({ onEndCall }) => {
             }
             if (message.serverContent?.turnComplete) {
               const fullIn = transcriptionBufferRef.current.input;
-              if (fullIn.trim()) setTranscripts(prev => [...prev.slice(-10), `Speaker: ${fullIn}`]);
+              if (fullIn.trim()) setTranscripts(prev => [...prev.slice(-5), `Speaker: ${fullIn}`]);
               transcriptionBufferRef.current.input = '';
             }
 
@@ -139,17 +160,17 @@ const CallProtection: React.FC<CallProtectionProps> = ({ onEndCall }) => {
     if (audioContextRef.current) audioContextRef.current.close();
   };
 
-  const handleEnd = () => {
-    // FIX: Added missing 'isSavedContact' property to satisfy CallLog interface
+  const handleEnd = (isAuto = false) => {
     const finalLog: CallLog = {
       id: Date.now().toString(),
       timestamp: new Date(),
       duration: elapsedTime,
       riskLevel: risk.level,
       transcript: transcripts.join(' | '),
-      summary: risk.reason,
+      summary: isAuto ? `AUTO-TERMINATED: ${risk.reason}` : risk.reason,
       scamMarkers: risk.markers,
-      isSavedContact: false
+      isSavedContact: false,
+      isBlocked: isAuto || risk.level === 'HIGH'
     };
     cleanup();
     onEndCall(finalLog);
@@ -169,71 +190,64 @@ const CallProtection: React.FC<CallProtectionProps> = ({ onEndCall }) => {
           <div className="absolute inset-0 border-4 border-t-white rounded-full animate-spin"></div>
         </div>
         <h2 className="text-2xl font-bold mb-2">Connecting Guardian</h2>
-        <p className="text-white/60 text-center">Encrypting channel and activating AI voice analysis...</p>
+        <p className="text-white/60 text-center">Activating real-time scam interception...</p>
       </div>
     );
   }
 
   return (
-    <div className={`fixed inset-0 z-50 transition-colors duration-1000 ${risk.level === 'HIGH' ? 'bg-red-900' : risk.level === 'MEDIUM' ? 'bg-orange-900' : 'bg-slate-900'}`}>
+    <div className={`fixed inset-0 z-50 transition-colors duration-1000 ${risk.level === 'HIGH' ? 'bg-red-600' : risk.level === 'MEDIUM' ? 'bg-orange-500' : 'bg-slate-900'}`}>
       <div className="flex flex-col h-full safe-area-inset-bottom">
         
         {/* Risk Header */}
         <div className="p-8 pt-16 text-center">
           <div className={`inline-block px-4 py-1 rounded-full text-[10px] font-black tracking-widest uppercase mb-4 ${risk.level === 'HIGH' ? 'bg-white text-red-600' : 'bg-white/20 text-white'}`}>
-            <i className="fas fa-shield-halved mr-2"></i> Real-time Analysis
+            <i className="fas fa-microchip mr-2"></i> AI Protection Live
           </div>
-          <h1 className="text-white/60 text-lg font-medium mb-1">Active Call</h1>
-          <p className="text-white text-3xl font-mono font-bold">{formatTime(elapsedTime)}</p>
+          <h1 className="text-white/60 text-lg font-medium mb-1">Scanned Conversation</h1>
+          <p className="text-white text-3xl font-mono font-bold tracking-widest">{formatTime(elapsedTime)}</p>
         </div>
 
         {/* Dynamic Visualizer */}
         <div className="flex-1 flex flex-col items-center justify-center px-6">
           <div className="relative mb-12">
-            <div className={`w-40 h-40 rounded-full flex items-center justify-center text-5xl text-white transition-all duration-500 shadow-2xl ${RISK_COLORS[risk.level]} ${risk.level === 'HIGH' ? 'animate-pulse scale-110' : ''}`}>
-              <i className={`fas ${risk.level === 'HIGH' ? 'fa-triangle-exclamation' : 'fa-user-lock'}`}></i>
+            <div className={`w-40 h-40 rounded-full flex items-center justify-center text-5xl text-white transition-all duration-500 shadow-2xl ${RISK_COLORS[risk.level]} ${risk.level === 'HIGH' ? 'animate-bounce scale-110 shadow-red-500/50' : 'animate-pulse'}`}>
+              <i className={`fas ${risk.level === 'HIGH' ? 'fa-phone-slash' : 'fa-wave-square'}`}></i>
             </div>
-            {risk.level === 'HIGH' && (
-              <div className="absolute -top-2 -right-2 bg-white text-red-600 w-10 h-10 rounded-full flex items-center justify-center animate-bounce shadow-lg">
-                <i className="fas fa-bell"></i>
-              </div>
-            )}
           </div>
 
-          <div className={`p-6 rounded-3xl w-full text-center transition-all duration-500 ${risk.level === 'HIGH' ? 'bg-white' : 'bg-white/10 backdrop-blur-md'}`}>
-            <p className={`text-xl font-bold mb-2 ${risk.level === 'HIGH' ? 'text-red-600' : 'text-white'}`}>
-              {risk.level === 'HIGH' ? 'DANGER DETECTED' : 'Safe to Converse'}
+          <div className={`p-8 rounded-[40px] w-full text-center transition-all duration-500 ${risk.level === 'HIGH' ? 'bg-white' : 'bg-white/10 backdrop-blur-xl border border-white/10'}`}>
+            <p className={`text-xl font-black mb-2 uppercase tracking-tight ${risk.level === 'HIGH' ? 'text-red-600' : 'text-white'}`}>
+              {autoTerminated ? 'CUTTING CALL...' : risk.level === 'HIGH' ? 'FRAUD DETECTED' : 'Analyzing Voice...'}
             </p>
-            <p className={`text-sm leading-relaxed ${risk.level === 'HIGH' ? 'text-slate-800' : 'text-white/70'}`}>
+            <p className={`text-sm leading-relaxed font-medium ${risk.level === 'HIGH' ? 'text-slate-800' : 'text-white/70'}`}>
               {risk.reason}
             </p>
+            {risk.markers.length > 0 && (
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {risk.markers.map(m => (
+                  <span key={m} className="px-3 py-1 bg-red-50 text-red-600 text-[10px] font-black rounded-full border border-red-100 uppercase">{m}</span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Live Subtitles */}
-        <div className="h-24 px-8 flex items-center justify-center text-center overflow-hidden mb-8">
-           <p className="text-white/40 italic text-sm line-clamp-2">
-             {transcripts.slice(-1)[0] || "Listening for speech patterns..."}
+        <div className="h-24 px-8 flex items-center justify-center text-center overflow-hidden mb-4">
+           <p className="text-white/50 italic text-sm line-clamp-2 bg-black/20 p-4 rounded-3xl backdrop-blur-sm w-full border border-white/5">
+             {transcripts.slice(-1)[0] || "Monitoring audio for scam patterns..."}
            </p>
         </div>
 
         {/* Call Controls */}
-        <div className="p-8 grid grid-cols-1 gap-4">
-          {risk.level === 'HIGH' && (
-            <button 
-              onClick={handleEnd}
-              className="w-full bg-white text-red-600 py-6 rounded-2xl font-black text-xl shadow-xl flex items-center justify-center space-x-3 active:scale-95 transition-transform"
-            >
-              <i className="fas fa-phone-slash"></i>
-              <span>HANG UP NOW</span>
-            </button>
-          )}
+        <div className="p-8 flex items-center justify-center pb-12">
           <button 
-            onClick={handleEnd}
-            className={`w-full py-6 rounded-2xl font-bold flex items-center justify-center space-x-3 active:scale-95 transition-transform ${risk.level === 'HIGH' ? 'bg-white/20 text-white' : 'bg-red-500 text-white shadow-xl'}`}
+            onClick={() => handleEnd()}
+            disabled={autoTerminated}
+            className={`w-24 h-24 rounded-full flex items-center justify-center text-3xl shadow-2xl active:scale-90 transition-transform ${risk.level === 'HIGH' ? 'bg-white text-red-600' : 'bg-red-600 text-white'}`}
           >
             <i className="fas fa-phone-slash"></i>
-            <span>{risk.level === 'HIGH' ? 'Safety Disconnect' : 'End Call'}</span>
           </button>
         </div>
       </div>

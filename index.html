@@ -6,7 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="GuardianAI">
     <meta name="theme-color" content="#4f46e5">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
     <title>GuardianAI Mobile</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -25,13 +30,34 @@
     -webkit-tap-highlight-color: transparent;
     user-select: none;
     overscroll-behavior-y: contain;
+    background-color: #f8fafc;
   }
+  /* Fix for iOS bottom bar covering UI */
   .safe-area-inset-bottom {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  /* Smooth transitions for mobile view changes */
+  .animate-fadeIn {
+    animation: fadeIn 0.3s ease-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 </style>
 </head>
 <body class="bg-slate-50 text-slate-900 overflow-x-hidden">
     <div id="root"></div>
+    <script>
+      // Simple service worker registration for PWA compliance
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').catch(() => {
+            console.log('SW registration failed (Standard for local dev)');
+          });
+        });
+      }
+    </script>
 </body>
 </html>

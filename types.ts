@@ -18,6 +18,8 @@ export interface CallLog {
   scamMarkers: string[];
   callerId?: string;
   isSavedContact: boolean;
+  reportedAt?: number; // Timestamp of report
+  isBlocked?: boolean;
 }
 
 export interface LiveAnalysis {

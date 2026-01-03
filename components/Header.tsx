@@ -1,7 +1,11 @@
 
 import React from 'react';
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  onSettingsClick: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ onSettingsClick }) => {
   return (
     <header className="bg-white border-b sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -20,7 +24,10 @@ const Header: React.FC = () => {
             </span>
             <span>System Active</span>
           </div>
-          <button className="text-slate-500 hover:text-slate-800 transition-colors">
+          <button 
+            onClick={onSettingsClick}
+            className="text-slate-500 hover:text-slate-800 transition-colors p-2 rounded-full hover:bg-slate-100"
+          >
             <i className="fas fa-gear text-lg"></i>
           </button>
         </div>
