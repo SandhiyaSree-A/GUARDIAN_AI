@@ -1,0 +1,7 @@
+{
+  "name": "GuardianAI: Real-Time Fraud Prevention",
+  "description": "An advanced AI-powered real-time audio intelligence system designed to detect scam patterns during live calls, providing immediate alerts and emotional analysis to protect vulnerable users.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
